@@ -1,0 +1,85 @@
+{
+  "log_level": {
+    "description": "全局最低记录级别",
+    "type": "string",
+    "default": "DEBUG",
+    "options": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+  },
+  "max_file_size_mb": {
+    "description": "单个日志文件最大大小(MB)",
+    "type": "int",
+    "default": 10
+  },
+  "backup_count": {
+    "description": "保留轮换文件数量",
+    "type": "int",
+    "default": 5
+  },
+  "rotation_strategy": {
+    "description": "轮换策略: size=按大小, time=按时间, hybrid=混合",
+    "type": "string",
+    "default": "size",
+    "options": ["size", "time", "hybrid"]
+  },
+  "rotation_interval": {
+    "description": "时间轮换间隔(当策略含time时生效)",
+    "type": "string",
+    "default": "daily",
+    "options": ["hourly", "daily"]
+  },
+  "enable_all_log": {
+    "description": "保存全局日志(all.log)",
+    "type": "bool",
+    "default": true
+  },
+  "enable_core_log": {
+    "description": "单独保存Core日志",
+    "type": "bool",
+    "default": true
+  },
+  "enable_error_log": {
+    "description": "单独保存错误日志(ERROR及以上)",
+    "type": "bool",
+    "default": true
+  },
+  "enable_plugin_separation": {
+    "description": "按插件分类存储日志",
+    "type": "bool",
+    "default": true
+  },
+  "enable_compression": {
+    "description": "自动压缩旧日志文件",
+    "type": "bool",
+    "default": true
+  },
+  "compression_after_days": {
+    "description": "日志文件超过N天后压缩",
+    "type": "int",
+    "default": 1
+  },
+  "auto_clean_enabled": {
+    "description": "启用自动清理旧日志",
+    "type": "bool",
+    "default": true
+  },
+  "max_total_size_mb": {
+    "description": "日志总大小上限(MB)，超出后清理最旧文件",
+    "type": "int",
+    "default": 500
+  },
+  "max_age_days": {
+    "description": "日志最大保留天数",
+    "type": "int",
+    "default": 30
+  },
+  "enable_sensitive_filter": {
+    "description": "启用敏感信息脱敏",
+    "type": "bool",
+    "default": true
+  },
+  "sensitive_keywords": {
+    "description": "敏感关键词列表(逗号分隔)",
+    "type": "string",
+    "default": "token,password,secret,api_key,apikey,access_key,accesskey"
+  }
+}

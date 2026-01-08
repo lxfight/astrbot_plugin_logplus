@@ -10,8 +10,8 @@ if TYPE_CHECKING:
 class CommandHandler:
     """命令处理器"""
 
-    def __init__(self, data_dir: str, cleaner: "LogCleaner"):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir: Path, cleaner: "LogCleaner"):
+        self.data_dir = data_dir
         self.cleaner = cleaner
 
     async def handle_status(self) -> str:

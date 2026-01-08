@@ -1,9 +1,18 @@
+import copy
 import logging
 import re
 
 
-class SensitiveFilter(logging.Filter):
-    """敏感信息脱敏过滤器"""
+class SensitiveFilter:
+    """敏感信息脱敏处理器
+
+    注意: 此类不再继承 logging.Filter，而是作为独立的脱敏工具。
+    应在 Handler.emit 中对复制的 LogRecord 调用 mask_record 方法，
+    以避免影响其他 Handler。
+
+    仅支持 f-string 格式日志中 key=value 模式的脱敏。
+    对于参数化日志 (logger.info("%s", value))，会对 args 中的值进行独立检测。
+    """
 
     DEFAULT_KEYWORDS = [
         "token",
@@ -24,7 +33,6 @@ class SensitiveFilter(logging.Filter):
     MASK = "***"
 
     def __init__(self, keywords: list[str] = None, enabled: bool = True):
-        super().__init__()
         self.enabled = enabled
         self.keywords = keywords or self.DEFAULT_KEYWORDS
         self._compile_patterns()
@@ -46,25 +54,28 @@ class SensitiveFilter(logging.Filter):
             for p in patterns:
                 self.patterns.append(re.compile(p, re.IGNORECASE))
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        """过滤并脱敏敏感信息"""
+    def mask_record(self, record: logging.LogRecord) -> logging.LogRecord:
+        """对 LogRecord 进行脱敏处理，返回副本以避免影响其他 Handler"""
         if not self.enabled:
-            return True
+            return record
 
-        if hasattr(record, "msg") and record.msg:
-            record.msg = self._mask_sensitive(str(record.msg))
+        masked_record = copy.copy(record)
 
-        if hasattr(record, "args") and record.args:
-            if isinstance(record.args, dict):
-                record.args = {
-                    k: self._mask_sensitive(str(v)) for k, v in record.args.items()
+        if hasattr(masked_record, "msg") and masked_record.msg:
+            masked_record.msg = self._mask_sensitive(str(masked_record.msg))
+
+        if hasattr(masked_record, "args") and masked_record.args:
+            if isinstance(masked_record.args, dict):
+                masked_record.args = {
+                    k: self._mask_sensitive(str(v))
+                    for k, v in masked_record.args.items()
                 }
-            elif isinstance(record.args, tuple):
-                record.args = tuple(
-                    self._mask_sensitive(str(arg)) for arg in record.args
+            elif isinstance(masked_record.args, tuple):
+                masked_record.args = tuple(
+                    self._mask_sensitive(str(arg)) for arg in masked_record.args
                 )
 
-        return True
+        return masked_record
 
     def _mask_sensitive(self, text: str) -> str:
         """脱敏敏感信息"""

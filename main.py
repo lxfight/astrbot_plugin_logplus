@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from pathlib import Path
 from typing import Any
 
 from astrbot.api import logger
@@ -11,6 +11,8 @@ from .core.config_manager import ConfigManager
 from .core.log_cleaner import LogCleaner
 from .core.log_handler import LogPlusHandler
 from .core.sensitive_filter import SensitiveFilter
+
+LOG_LEVELS = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
 
 
 @register(
@@ -27,7 +29,7 @@ class LogPlusPlugin(Star):
         super().__init__(context)
         self.context = context
 
-        data_dir = str(StarTools.get_data_dir())
+        self.data_dir: Path = StarTools.get_data_dir()
 
         self.config_manager = ConfigManager(config)
         self.log_handler: LogPlusHandler | None = None
@@ -35,9 +37,9 @@ class LogPlusPlugin(Star):
         self.sensitive_filter: SensitiveFilter | None = None
         self.command_handler: CommandHandler | None = None
 
-        asyncio.create_task(self._initialize_plugin(data_dir))
+        asyncio.create_task(self._initialize_plugin())
 
-    async def _initialize_plugin(self, data_dir: str):
+    async def _initialize_plugin(self):
         """异步初始化插件"""
         try:
             config = self.config_manager.as_dict()
@@ -46,24 +48,22 @@ class LogPlusPlugin(Star):
                 keywords = self.config_manager.get_sensitive_keywords()
                 self.sensitive_filter = SensitiveFilter(keywords=keywords, enabled=True)
 
-            self.log_handler = LogPlusHandler(data_dir, config)
+            self.log_handler = LogPlusHandler(
+                self.data_dir, config, sensitive_filter=self.sensitive_filter
+            )
 
-            level_name = config.get("log_level", "DEBUG")
-            level = getattr(logging, level_name.upper(), logging.DEBUG)
+            level_name = config.get("log_level", "DEBUG").upper()
+            level = LOG_LEVELS.get(level_name, 10)
             self.log_handler.setLevel(level)
 
-            if self.sensitive_filter:
-                self.log_handler.addFilter(self.sensitive_filter)
+            logger.addHandler(self.log_handler)
 
-            astrbot_logger = logging.getLogger("astrbot")
-            astrbot_logger.addHandler(self.log_handler)
-
-            self.log_cleaner = LogCleaner(data_dir, config)
+            self.log_cleaner = LogCleaner(self.data_dir, config)
             await self.log_cleaner.start()
 
-            self.command_handler = CommandHandler(data_dir, self.log_cleaner)
+            self.command_handler = CommandHandler(self.data_dir, self.log_cleaner)
 
-            logger.info(f"✅ LogPlus 插件已启动，日志目录: {data_dir}")
+            logger.info(f"✅ LogPlus 插件已启动，日志目录: {self.data_dir}")
 
         except Exception as e:
             logger.error(f"LogPlus 插件初始化失败: {e}", exc_info=True)
@@ -74,8 +74,7 @@ class LogPlusPlugin(Star):
             await self.log_cleaner.stop()
 
         if self.log_handler:
-            astrbot_logger = logging.getLogger("astrbot")
-            astrbot_logger.removeHandler(self.log_handler)
+            logger.removeHandler(self.log_handler)
             self.log_handler.close()
 
         logger.info("LogPlus 插件已停止")

@@ -2,9 +2,14 @@ import gzip
 import logging
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
+
+_compress_executor = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="logplus_compress"
+)
 
 
 class CompressedRotatingFileHandler(RotatingFileHandler):
@@ -29,11 +34,11 @@ class CompressedRotatingFileHandler(RotatingFileHandler):
             self.stream = None
 
         if self.backupCount > 0:
-            # 压缩最旧的文件
+            # 异步压缩最旧的文件
             if self.enable_compression:
                 oldest = f"{self.baseFilename}.{self.backupCount}"
                 if os.path.exists(oldest):
-                    self._compress_file(oldest)
+                    _compress_executor.submit(_compress_file_sync, oldest)
 
             # 轮换文件
             for i in range(self.backupCount - 1, 0, -1):
@@ -52,16 +57,17 @@ class CompressedRotatingFileHandler(RotatingFileHandler):
         if not self.delay:
             self.stream = self._open()
 
-    def _compress_file(self, filepath: str):
-        """压缩文件为.gz格式"""
-        gz_path = f"{filepath}.gz"
-        try:
-            with open(filepath, "rb") as f_in:
-                with gzip.open(gz_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            os.remove(filepath)
-        except Exception:
-            pass
+
+def _compress_file_sync(filepath: str):
+    """在线程池中同步压缩文件"""
+    gz_path = f"{filepath}.gz"
+    try:
+        with open(filepath, "rb") as f_in:
+            with gzip.open(gz_path, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        os.remove(filepath)
+    except Exception:
+        pass
 
 
 class CompressedTimedRotatingFileHandler(TimedRotatingFileHandler):
@@ -87,38 +93,41 @@ class CompressedTimedRotatingFileHandler(TimedRotatingFileHandler):
     def doRollover(self):
         super().doRollover()
         if self.enable_compression and self.backupCount > 0:
-            self._compress_old_files()
+            _compress_executor.submit(
+                _compress_old_files_sync,
+                os.path.dirname(self.baseFilename),
+                os.path.basename(self.baseFilename),
+                self.baseFilename,
+            )
 
-    def _compress_old_files(self):
-        """压缩超过1天的旧日志文件"""
-        dir_path = os.path.dirname(self.baseFilename)
-        base_name = os.path.basename(self.baseFilename)
-        now = datetime.now()
 
+def _compress_old_files_sync(dir_path: str, base_name: str, current_file: str):
+    """在线程池中同步压缩旧日志文件"""
+    now = datetime.now()
+    try:
         for filename in os.listdir(dir_path):
             if filename.startswith(base_name) and not filename.endswith(".gz"):
                 filepath = os.path.join(dir_path, filename)
-                if filepath == self.baseFilename:
+                if filepath == current_file:
                     continue
                 try:
                     mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
                     if (now - mtime).days >= 1:
-                        gz_path = f"{filepath}.gz"
-                        with open(filepath, "rb") as f_in:
-                            with gzip.open(gz_path, "wb") as f_out:
-                                shutil.copyfileobj(f_in, f_out)
-                        os.remove(filepath)
+                        _compress_file_sync(filepath)
                 except Exception:
                     pass
+    except Exception:
+        pass
 
 
 class LogPlusHandler(logging.Handler):
     """日志增强主Handler，负责分发日志到各个文件"""
 
-    def __init__(self, data_dir: str, config: dict):
+    def __init__(self, data_dir: Path, config: dict, sensitive_filter=None):
         super().__init__()
-        self.data_dir = Path(data_dir)
+        self.data_dir = data_dir
         self.config = config
+        self.sensitive_filter = sensitive_filter
         self.handlers: dict[str, logging.Handler] = {}
         self._init_directories()
         self._init_handlers()
@@ -233,6 +242,10 @@ class LogPlusHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         """处理日志记录"""
         try:
+            # 复制 record 并进行脱敏，避免影响其他 Handler
+            if self.sensitive_filter:
+                record = self.sensitive_filter.mask_record(record)
+
             # 写入全局日志
             if "all" in self.handlers:
                 self.handlers["all"].emit(record)

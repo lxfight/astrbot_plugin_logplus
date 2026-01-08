@@ -20,8 +20,8 @@ class LogFileInfo:
 class LogCleaner:
     """日志清理器，负责压缩和清理旧日志"""
 
-    def __init__(self, data_dir: str, config: dict):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir: Path, config: dict):
+        self.data_dir = data_dir
         self.config = config
         self._task: asyncio.Task = None
 

@@ -5,6 +5,7 @@ from typing import Any
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools, register
+from astrbot.core.message.components import File, Plain
 
 from .core.command_handler import CommandHandler
 from .core.config_manager import ConfigManager
@@ -128,3 +129,38 @@ class LogPlusPlugin(Star):
             return
         result = self.command_handler.handle_help()
         yield event.plain_result(result)
+
+    @logplus.command("send")
+    async def cmd_send(
+        self, event: AstrMessageEvent, target: str = "", plugin: str = ""
+    ):
+        """发送日志文件"""
+        if not self.command_handler:
+            yield event.plain_result("❌ 插件尚未初始化完成")
+            return
+
+        # 合并target和plugin参数
+        # 支持 /logplus send all 或 /logplus send plugin <名称>
+        if target == "plugin" and plugin:
+            final_target = plugin
+        elif target:
+            final_target = target
+        else:
+            yield event.plain_result(
+                "❌ 用法:\n"
+                "  /logplus send all\n"
+                "  /logplus send errors\n"
+                "  /logplus send plugin <插件名>"
+            )
+            return
+
+        message, zip_path = await self.command_handler.handle_send(final_target)
+
+        if zip_path and zip_path.exists():
+            # 发送文件和消息
+            yield event.chain_result(
+                [Plain(message), File(name=zip_path.name, file=str(zip_path))]
+            )
+        else:
+            # 仅发送错误消息
+            yield event.plain_result(message)

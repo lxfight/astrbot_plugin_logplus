@@ -1,5 +1,5 @@
 name: astrbot_plugin_logplus
-desc: AstrBot日志增强插件，支持日志持久化、按插件分类、轮换、压缩、自动清理等功能
+desc: AstrBot日志增强插件，支持日志持久化、按插件分类、轮换、压缩、自动清理等功能，萌新必装，遇到BUG不知道怎么反馈？装它就完了。
 author: lxfight
 repo: "https://github.com/lxfight/astrbot_plugin_logplus"
-version: 1.1.0
+version: 1.2.0

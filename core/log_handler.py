@@ -267,8 +267,19 @@ class LogPlusHandler(logging.Handler):
             if "error" in self.handlers and record.levelno >= logging.ERROR:
                 self.handlers["error"].emit(record)
 
+            # 确保及时写入磁盘
+            self._flush_handlers()
+
         except Exception:
             self.handleError(record)
+
+    def _flush_handlers(self):
+        """刷新所有handler缓冲区以确保及时写入"""
+        for handler in self.handlers.values():
+            try:
+                handler.flush()
+            except Exception:
+                pass
 
     def _is_plugin_path(self, pathname: str) -> bool:
         """判断是否来自插件目录"""
